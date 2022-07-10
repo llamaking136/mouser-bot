@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 import json, hashlib
 import re as regex
-import modules.database as db
 import os
 
 with open("config/core.json", "r") as f:
