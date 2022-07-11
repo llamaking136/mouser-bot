@@ -193,7 +193,7 @@ async def deletewebhook(ctx):
 
     await ctx.reply("Webhook deleted!")
 
-@bot.command()
+@bot.command(help = "Add a part for Mouser Bot to check.")
 async def addpart(ctx, partnum):
     if not await check_user_auth(ctx):
         return
@@ -237,7 +237,7 @@ async def addpart(ctx, partnum):
 
     await ctx.reply("Part added!")
 
-@bot.command()
+@bot.command(help = "Get a list of parts that Mouser Bot is checking.")
 async def listparts(ctx):
     if not await check_user_auth(ctx):
         return
@@ -264,7 +264,7 @@ async def listparts(ctx):
     for key, value in servers["servers"][server_id]["partnums"].items():
         await ctx.send(f"Product ID: {key}\nIn stock: {value['in_stock']}\nProduct number: {value['partnum']}")
 
-@bot.command()
+@bot.command(help = "Delete a part that Mouser Bot is checking.")
 async def deletepart(ctx, partid):
     if not await check_user_auth(ctx):
         return
