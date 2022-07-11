@@ -3,6 +3,10 @@ from discord.ext import commands
 import json, hashlib
 import re as regex
 import os
+import socket
+from urllib.parse import urlparse
+import modules.database as db
+from loguru import logger
 
 with open("config/core.json", "r") as f:
     core = json.loads(f.read())
@@ -17,10 +21,20 @@ def get_version_hash():
 if not os.path.exists("db"):
     os.mkdir("db")
     with open("db/servers.json", "w") as f:
-        f.write("{}")
+        f.write("{\"servers\":{}}")
+
+mouser_ip = "184.86.201.136"
+
+def get_ip_from_domain(domain):
+    return socket.gethostbyname(domain)
+
+def check_if_url_is_mouser(url):
+    return get_ip_from_domain(urlparse(url).netloc) == mouser_ip
 
 intents = discord.Intents.default()
 intents.members = True
+
+max_urls_per_server = 5
 
 bot = commands.Bot(command_prefix = core["prefix"], intents = intents, activity = discord.Activity(name = f"version {get_version_hash()}", type = discord.ActivityType.playing))
 
@@ -94,6 +108,17 @@ async def createwebhook(ctx, *args):
         await ctx.reply("Error while creating webhook!")
         return
 
+    servers_db = db.Database("db/servers.json")
+    servers = servers_db.contents
+
+    try:
+        servers["servers"][str(ctx.message.guild.id)]
+    except KeyError:
+        servers["servers"][str(ctx.message.guild.id)] = {"webhookurl": webhook.url, "urls": {}}
+        servers_db.update(servers)
+        servers_db.commit()
+        servers_db.disconnect()
+
     await ctx.reply(f"Webhook created for the channel #{wchannel}!")
 
 @bot.command(help = "Changes the channel for the Mouser Bot webhook.")
@@ -118,6 +143,10 @@ async def editwebhook(ctx, *args):
     # mainly because i dont know how to fit two awaits into
     # one line
     webhook = await get_webhook_by_name(ctx, "Mouser Bot")
+    if not webhook:
+        await ctx.reply("Mouser Bot webhook doesn't exist yet!")
+        return
+
     await webhook.delete(reason = "fart lol")
 
     with open("mouser.png", "rb") as f:
@@ -127,6 +156,15 @@ async def editwebhook(ctx, *args):
     if not webhook:
         await ctx.reply("Error while replacing webhook!")
         return
+
+    servers_db = db.Database("db/servers.json")
+    servers = servers_db.contents
+
+    servers["servers"][str(ctx.message.guild.id)]["webhookurl"] = webhook.url
+
+    servers_db.update(servers)
+    servers_db.commit()
+    servers_db.disconnect()
 
     await ctx.reply(f"Webhook now in channel #{wchannel}!")
 
@@ -139,9 +177,133 @@ async def deletewebhook(ctx):
     # mainly because i dont know how to fit two awaits into
     # one line
     webhook = await get_webhook_by_name(ctx, "Mouser Bot")
+    if not webhook:
+        await ctx.reply("Mouser Bot webhook doesn't exist yet!")
+        return
+
     await webhook.delete(reason = "fart lllol")
 
+    servers_db = db.Database("db/servers.json")
+    servers = servers_db.contents
+
+    servers["servers"][str(ctx.message.guild.id)]["webhookurl"] = None
+
+    servers_db.update(servers)
+    servers_db.commit()
+    servers_db.disconnect()
+
     await ctx.reply("Webhook deleted!")
+
+@bot.command()
+async def addurl(ctx, url):
+    if not await check_user_auth(ctx):
+        return
+
+    if not check_if_url_is_mouser(url):
+        await ctx.reply("That link doesn't look like it's Mouser!\nTry a link like this: https://www.mouser.com/electronic-components/\nTip: don't forget the https://.")
+        return
+
+    servers_db = db.Database("db/servers.json")
+    servers = servers_db.contents
+
+    server_id = str(ctx.message.guild.id)
+
+    try:
+        servers["servers"][server_id]
+    except KeyError:
+        webhook = await get_webhook_by_name(ctx, "Mouser Bot")
+        if not webhook:
+            await ctx.reply("You need to set up the Mouser Bot webhook first!")
+            return
+        servers["servers"][server_id] = {"webhookurl": webhook.url, "urls": {}}
+
+    if len(servers["servers"][server_id]["urls"]) >= max_urls_per_server:
+        await ctx.reply("Looks like you've reached the limit on URLs for this server!")
+        return
+
+    try:
+        urlid = int(max(servers["servers"][server_id]["urls"])) + 1
+    except ValueError:
+        urlid = 1
+
+    servers["servers"][server_id]["urls"][urlid] = {"url": url, "in_stock": False, "stock": 0}
+
+    servers_db.update(servers)
+    servers_db.commit()
+    servers_db.disconnect()
+
+    await ctx.reply("URL added!")
+
+@bot.command()
+async def listurls(ctx):
+    if not await check_user_auth(ctx):
+        return
+
+    servers_db = db.Database("db/servers.json")
+    servers = servers_db.contents
+
+    server_id = str(ctx.message.guild.id)
+
+    if not await get_webhook_by_name(ctx, "Mouser Bot"):
+        await ctx.reply("You need to set up the Mouser Bot webhook first!")
+        return
+
+    try:
+        servers["servers"][server_id]
+    except KeyError:
+        await ctx.reply("Looks like there's no URLs here, maybe try adding one?")
+        return
+
+    if len(servers["servers"][server_id]["urls"]) <= 0:
+        await ctx.reply("Looks like there's no URLs here, maybe try adding one?")
+        return
+
+    for key, value in servers["servers"][server_id]["urls"].items():
+        await ctx.send(f"Product ID: {key}\nIn stock: {value['in_stock']}\nProduct URL: {value['url']}")
+
+@bot.command()
+async def deleteurl(ctx, urlid):
+    if not await check_user_auth(ctx):
+        return
+
+    servers_db = db.Database("db/servers.json")
+    servers = servers_db.contents
+
+    server_id = str(ctx.message.guild.id)
+
+    if not await get_webhook_by_name(ctx, "Mouser Bot"):
+        await ctx.reply("You need to set up the Mouser Bot webhook first!")
+        return
+
+    try:
+        servers["servers"][server_id]
+    except KeyError:
+        await ctx.reply("Looks like there's no URLs here, maybe try adding one?")
+        return
+
+    if len(servers["servers"][server_id]["urls"]) <= 0:
+        await ctx.reply("Looks like there's no URLs here, maybe try adding one?")
+        return
+
+    try:
+        servers["servers"][server_id]["urls"][urlid]
+    except KeyError:
+        await ctx.reply("URL with that ID doesn't exist!")
+        return
+
+    for key, value in servers["servers"][server_id]["urls"].items():
+        if int(key) > int(urlid):
+            servers["servers"][server_id]["urls"][str(int(key) - 1)] = value
+
+        if int(key) == len(servers["servers"][server_id]["urls"]):
+            del servers["servers"][server_id]["urls"][key]
+            break
+
+    servers_db.update(servers)
+    servers_db.commit()
+    servers_db.disconnect()
+
+    await ctx.reply(f"Deleted URL ID {urlid}!")
 
 @bot.event
 async def on_ready():
