@@ -49,7 +49,7 @@ async def get_webhook_by_name(ctx, name):
     return None
 
 async def check_user_auth(ctx):
-    if ctx.author.id != ctx.guild.owner_id or ctx.author.id != core["owner_id"]:
+    if ctx.author.id != ctx.guild.owner_id or str(ctx.author.id) != core["owner_id"]:
         await ctx.reply("Sorry, only the owner can preform this command.")
         return False
     return True
