@@ -20,7 +20,5 @@ if num_processes >= 2:
     print("Mouser Bot server already running!")
     exit(1)
 
-with daemon.DaemonContext(working_directory=os.getcwd(), stdout=open("/tmp/mouser_bot.log", "a"), stderr=open("/tmp/mouser_bot_err.log", "a")):
+with daemon.DaemonContext(working_directory=os.getcwd(), stdout=open("/tmp/mouser_bot.log", "a"), stderr=open("/tmp/mouser_bot.log", "a")):
     server._start()
-
-print("server started")

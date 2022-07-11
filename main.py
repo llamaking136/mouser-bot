@@ -3,10 +3,10 @@ from discord.ext import commands
 import json, hashlib
 import re as regex
 import os
-import socket
 from urllib.parse import urlparse
 import modules.database as db
 from loguru import logger
+import modules.mouser as mouser
 
 with open("config/core.json", "r") as f:
     core = json.loads(f.read())
@@ -23,18 +23,10 @@ if not os.path.exists("db"):
     with open("db/servers.json", "w") as f:
         f.write("{\"servers\":{}}")
 
-mouser_ip = "184.86.201.136"
-
-def get_ip_from_domain(domain):
-    return socket.gethostbyname(domain)
-
-def check_if_url_is_mouser(url):
-    return get_ip_from_domain(urlparse(url).netloc) == mouser_ip
-
 intents = discord.Intents.default()
 intents.members = True
 
-max_urls_per_server = 5
+max_parts_per_server = 5
 
 bot = commands.Bot(command_prefix = core["prefix"], intents = intents, activity = discord.Activity(name = f"version {get_version_hash()}", type = discord.ActivityType.playing))
 
@@ -59,6 +51,13 @@ async def get_webhook_by_name(ctx, name):
 async def check_user_auth(ctx):
     if ctx.author.id != ctx.guild.owner_id:
         await ctx.reply("Sorry, only the owner can preform this command.")
+        return False
+    return True
+
+def part_is_valid(partnum):
+    stock = mouser.check_mouser_part(core["apikey"], partnum, error_email = False)
+
+    if stock == None or stock <= -1:
         return False
     return True
 
@@ -114,7 +113,7 @@ async def createwebhook(ctx, *args):
     try:
         servers["servers"][str(ctx.message.guild.id)]
     except KeyError:
-        servers["servers"][str(ctx.message.guild.id)] = {"webhookurl": webhook.url, "urls": {}}
+        servers["servers"][str(ctx.message.guild.id)] = {"webhookurl": webhook.url, "partnums": {}}
         servers_db.update(servers)
         servers_db.commit()
         servers_db.disconnect()
@@ -195,13 +194,13 @@ async def deletewebhook(ctx):
     await ctx.reply("Webhook deleted!")
 
 @bot.command()
-async def addurl(ctx, url):
+async def addpart(ctx, partnum):
     if not await check_user_auth(ctx):
         return
 
-    if not check_if_url_is_mouser(url):
-        await ctx.reply("That link doesn't look like it's Mouser!\nTry a link like this: https://www.mouser.com/electronic-components/\nTip: don't forget the https://.")
-        return
+    # if not check_if_url_is_mouser(url):
+    #     await ctx.reply("That link doesn't look like it's Mouser!\nTry a link like this: https://www.mouser.com/electronic-components/\nTip: don't forget the https://.")
+    #     return
 
     servers_db = db.Database("db/servers.json")
     servers = servers_db.contents
@@ -215,27 +214,31 @@ async def addurl(ctx, url):
         if not webhook:
             await ctx.reply("You need to set up the Mouser Bot webhook first!")
             return
-        servers["servers"][server_id] = {"webhookurl": webhook.url, "urls": {}}
+        servers["servers"][server_id] = {"webhookurl": webhook.url, "partnums": {}}
 
-    if len(servers["servers"][server_id]["urls"]) >= max_urls_per_server:
-        await ctx.reply("Looks like you've reached the limit on URLs for this server!")
+    if not part_is_valid(partnum):
+        await ctx.reply("Looks like the part number you entered isn't valid!")
+        return
+
+    if len(servers["servers"][server_id]["partnums"]) >= max_parts_per_server:
+        await ctx.reply("Looks like you've reached the limit on parts for this server!")
         return
 
     try:
-        urlid = int(max(servers["servers"][server_id]["urls"])) + 1
+        partid = int(max(servers["servers"][server_id]["partnums"])) + 1
     except ValueError:
-        urlid = 1
+        partid = 1
 
-    servers["servers"][server_id]["urls"][urlid] = {"url": url, "in_stock": False, "stock": 0}
+    servers["servers"][server_id]["partnums"][partid] = {"partnum": partnum, "in_stock": False, "stock": None}
 
     servers_db.update(servers)
     servers_db.commit()
     servers_db.disconnect()
 
-    await ctx.reply("URL added!")
+    await ctx.reply("Part added!")
 
 @bot.command()
-async def listurls(ctx):
+async def listparts(ctx):
     if not await check_user_auth(ctx):
         return
 
@@ -251,18 +254,18 @@ async def listurls(ctx):
     try:
         servers["servers"][server_id]
     except KeyError:
-        await ctx.reply("Looks like there's no URLs here, maybe try adding one?")
+        await ctx.reply("Looks like there's no parts here, maybe try adding one?")
         return
 
-    if len(servers["servers"][server_id]["urls"]) <= 0:
-        await ctx.reply("Looks like there's no URLs here, maybe try adding one?")
+    if len(servers["servers"][server_id]["partnums"]) <= 0:
+        await ctx.reply("Looks like there's no parts here, maybe try adding one?")
         return
 
-    for key, value in servers["servers"][server_id]["urls"].items():
-        await ctx.send(f"Product ID: {key}\nIn stock: {value['in_stock']}\nProduct URL: {value['url']}")
+    for key, value in servers["servers"][server_id]["partnums"].items():
+        await ctx.send(f"Product ID: {key}\nIn stock: {value['in_stock']}\nProduct number: {value['partnum']}")
 
 @bot.command()
-async def deleteurl(ctx, urlid):
+async def deletepart(ctx, partid):
     if not await check_user_auth(ctx):
         return
 
@@ -278,32 +281,32 @@ async def deleteurl(ctx, urlid):
     try:
         servers["servers"][server_id]
     except KeyError:
-        await ctx.reply("Looks like there's no URLs here, maybe try adding one?")
+        await ctx.reply("Looks like there's no parts here, maybe try adding one?")
         return
 
-    if len(servers["servers"][server_id]["urls"]) <= 0:
-        await ctx.reply("Looks like there's no URLs here, maybe try adding one?")
+    if len(servers["servers"][server_id]["partnums"]) <= 0:
+        await ctx.reply("Looks like there's no parts here, maybe try adding one?")
         return
 
     try:
-        servers["servers"][server_id]["urls"][urlid]
+        servers["servers"][server_id]["partnums"][urlid]
     except KeyError:
-        await ctx.reply("URL with that ID doesn't exist!")
+        await ctx.reply("Part with that ID doesn't exist!")
         return
 
-    for key, value in servers["servers"][server_id]["urls"].items():
-        if int(key) > int(urlid):
-            servers["servers"][server_id]["urls"][str(int(key) - 1)] = value
+    for key, value in servers["servers"][server_id]["partnums"].items():
+        if int(key) > int(partid):
+            servers["servers"][server_id]["partnums"][str(int(key) - 1)] = value
 
-        if int(key) == len(servers["servers"][server_id]["urls"]):
-            del servers["servers"][server_id]["urls"][key]
+        if int(key) == len(servers["servers"][server_id]["partnums"]):
+            del servers["servers"][server_id]["partnums"][key]
             break
 
     servers_db.update(servers)
     servers_db.commit()
     servers_db.disconnect()
 
-    await ctx.reply(f"Deleted URL ID {urlid}!")
+    await ctx.reply(f"Deleted part ID {urlid}!")
 
 @bot.event
 async def on_ready():

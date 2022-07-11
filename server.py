@@ -9,10 +9,12 @@ from discord_webhook import DiscordWebhook
 import requests
 import ssl
 import smtplib
+import re
+import modules.mouser as mouser
+import json
+import hashlib
 
 wait_for_minutes = 15
-
-user_agent = "Mozilla/5.0 (Windows NT 10.0; rv:91.0) Gecko/20100101 Firefox/91.0"
 
 with open("config/core.json", "r") as f:
     core = json.loads(f.read())
@@ -23,15 +25,6 @@ class Response:
         self.is_valid = is_valid
         self.stock = stock
         self.in_stock = in_stock
-
-def send_email(from_, to, password, subject, content, smtp_server = "smtp.gmail.com", smtp_port = 465):
-    ssl_context = ssl.create_default_context()
-    service = smtplib.SMTP_SSL(smtp_server, smtp_port, context = ssl_context)
-    service.login(from_, password)
-    
-    service.sendmail(from_, to, f"{content}")
-
-    service.quit()
 
 def get_version_hash():
     filedata = ""
@@ -47,30 +40,17 @@ def get_line(input_, text):
             return i
     return None
 
-def check_mouser_url(url):
-    response = Response(url, None, None, False)
-    request = requests.get(url, headers = {"User-Agent": user_agent})
-    text = request.text
-    if not request.ok:
-        return -request.status_code
-    line = get_line(text, "class=\"panel-title pdp-pricing-header\"")
-    if not line:
-        response.is_valid = False
-        return response
-
-    response.is_valid = True
-
-    if "Availability" in line:
-        return response
-
-    print(line)
-
-    # split = text.split("\n")
-    # return # strip(split[line]).strip()
-
 def wait_for_minute():
     while ((int(time.time())/60) % wait_for_minutes) >= 0.5:
         time.sleep(1)
+
+def send_webhook(url, partnum, text, add_mouser_link = True):
+    logger.info(f"Sent webhook with text: '{text}'")
+    content = text
+    if add_mouser_link:
+        content += f"\nhttps://www.mouser.com/ProductDetail/{partnum}"
+
+    DiscordWebhook(url = url, content = content).execute()
 
 def main():
     logger.info("Mouser Bot server startup")
@@ -82,12 +62,47 @@ def main():
         servers_db = db.Database("db/servers.json")
         servers = servers_db.contents
         
-        for i in servers["servers"]:
-            if not i["webhookurl"]:
+        for i in servers["servers"].keys():
+            if not servers["servers"][i]["webhookurl"]:
                 continue
-
             
+            webhookurl = servers["servers"][i]["webhookurl"]
+            i = servers["servers"][i]
+            for partid, part in i["partnums"].items():
+                time.sleep(5)
+                stock = mouser.check_mouser_part(core["apikey"], part["partnum"])      
+                if stock <= -2:
+                    logger.error(f"Error while requesting part# {part['partnum']}: check_mouser_part returned {stock}")
+                    continue
 
+                # if product out of stock but it was in stock
+                if stock == -1 and part["in_stock"]:
+                    send_webhook(webhookurl, part["partnum"], f"Product# {part['partnum']} is now out of stock!")
+                    i["partnums"][partid]["stock"] = 0
+                    i["partnums"][partid]["in_stock"] = False
+                    continue
+
+                # if product in stock but it was out of stock
+                if stock >= 1 and not part["in_stock"] and part["stock"] != None:
+                    send_webhook(webhookurl, part["partnum"], f"Product# {part['partnum']} is back in stock!")
+                    i["partnums"][partid]["stock"] = stock
+                    i["partnums"][partid]["in_stock"] = True
+                    continue
+
+                # if stock is different from last time
+                if stock != part["stock"]:
+                    if part["stock"] != None:
+                        send_webhook(webhookurl, part["partnum"], f"Change in stock for product# {part['partnum']}! Was {part['stock']}, now is {stock}.")
+                    else:
+                        i["partnums"][partid]["in_stock"] = True
+                    i["partnums"][partid]["stock"] = stock
+                    continue
+       
+        servers_db.update(servers)
+        servers_db.commit()
+        servers_db.disconnect()
+
+        logger.info("Waiting for next iteration...")
         wait_for_minute()
 
 def _start():
