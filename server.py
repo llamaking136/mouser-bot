@@ -16,6 +16,8 @@ import hashlib
 
 wait_for_minutes = 15
 
+already_went = False
+
 with open("config/core.json", "r") as f:
     core = json.loads(f.read())
 
@@ -41,18 +43,28 @@ def get_line(input_, text):
     return None
 
 def wait_for_minute():
-    while ((int(time.time())/60) % wait_for_minutes) >= 0.5:
+    global already_went
+    while ((int(time.time())/60) % wait_for_minutes) >= 0.5 or already_went:
+        # after 5 minutes turn already_went off
+        if ((int(time.time())/60) % wait_for_minutes) >= 5:
+            already_went = False
         time.sleep(1)
 
 def send_webhook(url, partnum, text, add_mouser_link = True):
-    logger.info(f"Sent webhook with text: '{text}'")
     content = text
     if add_mouser_link:
         content += f"\nhttps://www.mouser.com/ProductDetail/{partnum}"
 
-    DiscordWebhook(url = url, content = content).execute()
+    res = DiscordWebhook(url = url, content = content).execute()
+    if not res.ok:
+        logger.error(f"Error while sending webhook: got response {res.status_code} with URL {url}")
+        return
+
+    logger.info(f"Sent webhook with text: '{text}'")
 
 def main():
+    global already_went
+
     logger.info("Mouser Bot server startup")
 
     logger.info(f"PID: {os.getpid()}")
@@ -98,6 +110,8 @@ def main():
                     i["partnums"][partid]["stock"] = stock
                     continue
        
+        already_went = True
+
         servers_db.update(servers)
         servers_db.commit()
         servers_db.disconnect()
