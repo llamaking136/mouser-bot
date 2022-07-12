@@ -67,7 +67,7 @@ async def ping(ctx):
 
 @bot.command(hidden = True)
 async def urls(ctx):
-    if ctx.author.id != core["id"]:
+    if ctx.author.id != core["owner_id"]:
         return
 
     wlist = await get_webhooks_from_message(ctx)
@@ -289,7 +289,7 @@ async def deletepart(ctx, partid):
         return
 
     try:
-        servers["servers"][server_id]["partnums"][urlid]
+        servers["servers"][server_id]["partnums"][partid]
     except KeyError:
         await ctx.reply("Part with that ID doesn't exist!")
         return
@@ -306,7 +306,7 @@ async def deletepart(ctx, partid):
     servers_db.commit()
     servers_db.disconnect()
 
-    await ctx.reply(f"Deleted part ID {urlid}!")
+    await ctx.reply(f"Deleted part ID {partid}!")
 
 @bot.event
 async def on_ready():
