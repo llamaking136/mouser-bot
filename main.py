@@ -202,10 +202,6 @@ async def addpart(ctx, partnum):
     if not await check_user_auth(ctx):
         return
 
-    # if not check_if_url_is_mouser(url):
-    #     await ctx.reply("That link doesn't look like it's Mouser!\nTry a link like this: https://www.mouser.com/electronic-components/\nTip: don't forget the https://.")
-    #     return
-
     servers_db = db.Database("db/servers.json")
     servers = servers_db.contents
 

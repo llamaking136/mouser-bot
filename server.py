@@ -101,8 +101,8 @@ def main():
                     i["partnums"][partid]["in_stock"] = True
                     continue
 
-                # if stock is different from last time
-                if stock != part["stock"]:
+                # if stock is different from last time and isn't -1
+                if stock != part["stock"] and stock != -1:
                     if part["stock"] != None:
                         send_webhook(webhookurl, part["partnum"], f"Change in stock for product# {part['partnum']}! Was {part['stock']}, now is {stock}.")
                     else:
