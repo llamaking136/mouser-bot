@@ -57,7 +57,7 @@ async def check_user_auth(ctx):
 def part_is_valid(partnum):
     stock = mouser.check_mouser_part(core["apikey"], partnum, error_email = False)
 
-    if stock == None or stock <= -1:
+    if stock == None or stock < -1:
         return False
     return True
 
@@ -78,6 +78,7 @@ async def urls(ctx):
     await ctx.send(wlist)
 
 @bot.command(help = "Creates the Mouser Bot webhook.")
+@logger.catch()
 async def createwebhook(ctx, *args):
     if not await check_user_auth(ctx):
         return
@@ -121,6 +122,7 @@ async def createwebhook(ctx, *args):
     await ctx.reply(f"Webhook created for the channel #{wchannel}!")
 
 @bot.command(help = "Changes the channel for the Mouser Bot webhook.")
+@logger.catch()
 async def editwebhook(ctx, *args):
     if not await check_user_auth(ctx):
         return
@@ -168,6 +170,7 @@ async def editwebhook(ctx, *args):
     await ctx.reply(f"Webhook now in channel #{wchannel}!")
 
 @bot.command(help = "Deletes the Mouser Bot webhook.")
+@logger.catch()
 async def deletewebhook(ctx):
     if not await check_user_auth(ctx):
         return
@@ -194,6 +197,7 @@ async def deletewebhook(ctx):
     await ctx.reply("Webhook deleted!")
 
 @bot.command(help = "Add a part for Mouser Bot to check.")
+@logger.catch()
 async def addpart(ctx, partnum):
     if not await check_user_auth(ctx):
         return
@@ -201,6 +205,8 @@ async def addpart(ctx, partnum):
     # if not check_if_url_is_mouser(url):
     #     await ctx.reply("That link doesn't look like it's Mouser!\nTry a link like this: https://www.mouser.com/electronic-components/\nTip: don't forget the https://.")
     #     return
+
+    assert False
 
     servers_db = db.Database("db/servers.json")
     servers = servers_db.contents
@@ -238,6 +244,7 @@ async def addpart(ctx, partnum):
     await ctx.reply("Part added!")
 
 @bot.command(help = "Get a list of parts that Mouser Bot is checking.")
+@logger.catch()
 async def listparts(ctx):
     if not await check_user_auth(ctx):
         return
@@ -265,6 +272,7 @@ async def listparts(ctx):
         await ctx.send(f"Product ID: {key}\nIn stock: {value['in_stock']}\nProduct number: {value['partnum']}")
 
 @bot.command(help = "Delete a part that Mouser Bot is checking.")
+@logger.catch()
 async def deletepart(ctx, partid):
     if not await check_user_auth(ctx):
         return
@@ -310,7 +318,9 @@ async def deletepart(ctx, partid):
 
 @bot.event
 async def on_ready():
-    print(f"Mouser Bot ready for {len(bot.guilds)} server(s)!")
+    logger.info(f"Version hash: {get_version_hash()}")
+    logger.info(f"PID: {os.getpid()}")
+    logger.info(f"Mouser Bot ready for {len(bot.guilds)} server(s)!")
 
 with open("current_hash.txt", "w") as f:
     f.write(get_version_hash())
