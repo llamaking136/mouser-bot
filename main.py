@@ -206,8 +206,6 @@ async def addpart(ctx, partnum):
     #     await ctx.reply("That link doesn't look like it's Mouser!\nTry a link like this: https://www.mouser.com/electronic-components/\nTip: don't forget the https://.")
     #     return
 
-    assert False
-
     servers_db = db.Database("db/servers.json")
     servers = servers_db.contents
 
