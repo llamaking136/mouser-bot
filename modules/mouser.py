@@ -52,9 +52,18 @@ def check_mouser_part(apikey, partnum, error_email = True):
         return None
 
     if res_json["SearchResults"]["NumberOfResult"] > 1:
-        return -2
+        found_part = False
+        for i in res_json["SearchResults"]["Parts"]:
+            if i["MouserPartNumber"] == partnum:
+                found_part = True
+                break
+        if not found_part:
+            return -2
 
-    raw_stock = res_json["SearchResults"]["Parts"][0]["Availability"]
+    try:
+        raw_stock = res_json["SearchResults"]["Parts"][0]["Availability"]
+    except KeyError:
+        return -1
 
     if "On Order" in raw_stock:
         return -1
