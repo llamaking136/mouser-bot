@@ -26,7 +26,7 @@ if not os.path.exists("db"):
 intents = discord.Intents.default()
 intents.members = True
 
-max_parts_per_server = 5
+max_parts_per_server = 10
 
 bot = commands.Bot(command_prefix = core["prefix"], intents = intents, activity = discord.Activity(name = f"version {get_version_hash()}", type = discord.ActivityType.playing))
 
