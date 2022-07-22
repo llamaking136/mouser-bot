@@ -292,11 +292,35 @@ async def deletepart(ctx, partid):
         await ctx.reply("Looks like there's no parts here, maybe try adding one?")
         return
 
+    partnum = None
+
+    # if partid isn't a number, try searching for a part num
+    try:
+        int(partid)
+    except ValueError:
+        for key, value in servers["servers"][server_id]["partnums"].items():
+            if partid == value["partnum"]:
+                partid = key
+                partnum = value["partnum"]
+                break
+        if not partnum:
+            await ctx.reply(f"Part# {partid} isn't being tracked!")
+            return
+
     try:
         servers["servers"][server_id]["partnums"][partid]
     except KeyError:
         await ctx.reply("Part with that ID doesn't exist!")
         return
+
+    if not partnum:
+        for key, value in servers["servers"][server_id]["partnums"].items():
+            if partid == key:
+                partnum = value["partnum"]
+                break
+        if not partnum:
+            await ctx.reply("Part with that ID doesn't exist!")
+            return
 
     for key, value in servers["servers"][server_id]["partnums"].items():
         if int(key) > int(partid):
@@ -310,7 +334,7 @@ async def deletepart(ctx, partid):
     servers_db.commit()
     servers_db.disconnect()
 
-    await ctx.reply(f"Deleted part ID {partid}!")
+    await ctx.reply(f"Deleted part ID {partid} (part# {partnum})!")
 
 @bot.event
 async def on_ready():
