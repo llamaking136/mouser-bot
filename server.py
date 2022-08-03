@@ -50,8 +50,31 @@ def wait_for_minute():
             already_went = False
         time.sleep(1)
 
-def send_webhook(url, partnum, text, add_mouser_link = True):
-    content = text
+def get_ping_users_for_part(server_id, partnum, status):
+    servers_db = db.Database("db/servers.json")
+    servers = servers_db.contents
+
+    user = servers["servers"][server_id]["user"]
+    users = []
+
+    for i, j in user.items():
+        for k in j.values():
+            for part, _status in k.items():
+                if partnum == part and _status == status:
+                    users.append(i)
+                elif partnum == part and _status == "all":
+                    users.append(i)
+
+    return users if users else None
+
+def send_webhook(url, partnum, text, add_mouser_link = True, pingusers = None):
+    content = ""
+    
+    if pingusers:
+        for i in pingusers:
+            content += f"<@{i}> "
+
+    content += text
     if add_mouser_link:
         content += f"\nhttps://www.mouser.com/ProductDetail/{partnum}"
 
@@ -75,6 +98,7 @@ def main():
         servers = servers_db.contents
         
         for i in servers["servers"].keys():
+            server_id = i
             if not servers["servers"][i]["webhookurl"]:
                 continue
             
@@ -89,14 +113,18 @@ def main():
 
                 # if product out of stock but it was in stock
                 if stock == -1 and part["in_stock"]:
-                    send_webhook(webhookurl, part["partnum"], f"Product# {part['partnum']} is now out of stock!")
+                    ping_users = get_ping_users_for_part(server_id, part["partnum"], "out-of-stock")
+
+                    send_webhook(webhookurl, part["partnum"], f"Product# {part['partnum']} is now out of stock!", pingusers = ping_users)
                     i["partnums"][partid]["stock"] = 0
                     i["partnums"][partid]["in_stock"] = False
                     continue
 
                 # if product in stock but it was out of stock
                 if stock >= 1 and not part["in_stock"] and part["stock"] != None:
-                    send_webhook(webhookurl, part["partnum"], f"Product# {part['partnum']} is back in stock!")
+                    ping_users = get_ping_users_for_part(server_id, part["partnum"], "in-stock")
+
+                    send_webhook(webhookurl, part["partnum"], f"Product# {part['partnum']} is back in stock!", pingusers = ping_users)
                     i["partnums"][partid]["stock"] = stock
                     i["partnums"][partid]["in_stock"] = True
                     continue
@@ -104,7 +132,8 @@ def main():
                 # if stock is different from last time and isn't -1
                 if stock != part["stock"] and stock != -1:
                     if part["stock"] != None:
-                        send_webhook(webhookurl, part["partnum"], f"Change in stock for product# {part['partnum']}! Was {part['stock']}, now is {stock}.")
+                        ping_users = get_ping_users_for_part(server_id, part["partnum"], "stock-change")
+                        send_webhook(webhookurl, part["partnum"], f"Change in stock for product# {part['partnum']}! Was {part['stock']}, now is {stock}.", pingusers = ping_users)
                     else:
                         i["partnums"][partid]["in_stock"] = True
                     i["partnums"][partid]["stock"] = stock
