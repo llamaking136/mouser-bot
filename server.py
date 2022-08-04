@@ -13,6 +13,7 @@ import re
 import modules.mouser as mouser
 import json
 import hashlib
+import modules.email_m as email
 
 wait_for_minutes = 15
 
@@ -155,3 +156,6 @@ def _start():
         print("Traceback (most recent call last):", file = sys.stderr)
         tb.print_tb(e.__traceback__, file = sys.stderr)
         print(f"{type(e).__name__}: {e}", file = sys.stderr)
+
+        email.send_error_email("Mouser Bot server Error!", debug = {"traceback": f"{type(e).__name__}: {e}"})
+        exit(1)

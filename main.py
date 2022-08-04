@@ -105,7 +105,7 @@ async def createwebhook(ctx, *args):
             return
 
     if await check_webhooks_for_name(ctx, "Mouser Bot"):
-        await ctx.reply("Looks like there's already a webhook here...")
+        await ctx.reply("Looks like there's already a webhook here.")
         return
     
     with open("mouser.png", "rb") as f:
@@ -122,7 +122,7 @@ async def createwebhook(ctx, *args):
     try:
         servers["servers"][str(ctx.message.guild.id)]
     except KeyError:
-        servers["servers"][str(ctx.message.guild.id)] = {"webhookurl": webhook.url, "partnums": {}}
+        servers["servers"][str(ctx.message.guild.id)] = {"webhookurl": webhook.url, "partnums": {}, "user": {}}
         servers_db.update(servers)
         servers_db.commit()
         servers_db.disconnect()
@@ -222,7 +222,7 @@ async def addpart(ctx, partnum):
         if not webhook:
             await ctx.reply("You need to set up the Mouser Bot webhook first.")
             return
-        servers["servers"][server_id] = {"webhookurl": webhook.url, "partnums": {}}
+        servers["servers"][server_id] = {"webhookurl": webhook.url, "partnums": {}, "user": {}}
 
     if not part_is_valid(partnum):
         await ctx.reply("Looks like the part number you entered isn't valid.")
