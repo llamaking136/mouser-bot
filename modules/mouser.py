@@ -65,7 +65,7 @@ def check_mouser_part(apikey, partnum, error_email = True):
     except KeyError:
         return -1
 
-    if "On Order" in raw_stock:
+    if "On Order" in raw_stock or "None" in raw_stock or not raw_stock:
         return -1
 
     stock = int(raw_stock.replace(" In Stock", ""))

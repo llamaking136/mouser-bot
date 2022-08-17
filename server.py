@@ -15,7 +15,7 @@ import json
 import hashlib
 import modules.email_m as email
 
-wait_for_minutes = 15
+wait_for_minutes = 60
 
 already_went = False
 
@@ -158,4 +158,12 @@ def _start():
         print(f"{type(e).__name__}: {e}", file = sys.stderr)
 
         email.send_error_email("Mouser Bot server Error!", debug = {"traceback": f"{type(e).__name__}: {e}"})
-        exit(1)
+        # exit(1)
+
+        if type(e) == SystemExit:
+            exit(1)
+
+        # i love recursion
+        time.sleep(300)
+        logger.debug("Attempting to restart...")
+        _start()
