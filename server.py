@@ -19,6 +19,9 @@ wait_for_minutes = 60
 
 already_went = False
 
+num_tries = 0
+max_tries = 3
+
 with open("config/core.json", "r") as f:
     core = json.loads(f.read())
 
@@ -125,7 +128,7 @@ def main():
                 if stock >= 1 and not part["in_stock"] and part["stock"] != None:
                     ping_users = get_ping_users_for_part(server_id, part["partnum"], "in-stock")
 
-                    send_webhook(webhookurl, part["partnum"], f"Product# {part['partnum']} is back in stock!", pingusers = ping_users)
+                    send_webhook(webhookurl, part["partnum"], f"Product# {part['partnum']} is back in stock (at {stock})!", pingusers = ping_users)
                     i["partnums"][partid]["stock"] = stock
                     i["partnums"][partid]["in_stock"] = True
                     continue
@@ -133,8 +136,10 @@ def main():
                 # if stock is different from last time and isn't -1
                 if stock != part["stock"] and stock != -1:
                     if part["stock"] != None:
+                        difference = stock - part["stock"]
+                        
                         ping_users = get_ping_users_for_part(server_id, part["partnum"], "stock-change")
-                        send_webhook(webhookurl, part["partnum"], f"Change in stock for product# {part['partnum']}! Was {part['stock']}, now is {stock}.", pingusers = ping_users)
+                        send_webhook(webhookurl, part["partnum"], f"Change in stock for product# {part['partnum']}! Was {part['stock']}, now is {stock} (difference of {difference}).", pingusers = ping_users)
                     else:
                         i["partnums"][partid]["in_stock"] = True
                     i["partnums"][partid]["stock"] = stock
@@ -150,9 +155,15 @@ def main():
         wait_for_minute()
 
 def _start():
+    global num_tries
     try:
         main()
     except BaseException as e:
+        if type(e) == SystemExit:
+            exit(1)
+            
+        num_tries += 1
+                    
         print("Traceback (most recent call last):", file = sys.stderr)
         tb.print_tb(e.__traceback__, file = sys.stderr)
         print(f"{type(e).__name__}: {e}", file = sys.stderr)
@@ -160,10 +171,13 @@ def _start():
         email.send_error_email("Mouser Bot server Error!", debug = {"traceback": f"{type(e).__name__}: {e}"})
         # exit(1)
 
-        if type(e) == SystemExit:
+        if num_tries >= max_tries:
             exit(1)
 
         # i love recursion
-        time.sleep(300)
+        time.sleep(60)
         logger.debug("Attempting to restart...")
         _start()
+
+if __name__ == "__main__":
+    _start()

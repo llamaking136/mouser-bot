@@ -23,8 +23,7 @@ if not os.path.exists("db"):
     with open("db/servers.json", "w") as f:
         f.write("{\"servers\":{}}")
 
-intents = discord.Intents.default()
-intents.members = True
+intents = discord.Intents.all()
 
 max_parts_per_server = 10
 
